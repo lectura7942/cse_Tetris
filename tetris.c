@@ -51,8 +51,9 @@ void InitTetris() {
 	DrawOutline();
 	DrawField();
 	modified_recommend(recRoot);
-	if(playVersion==MENU_PLAY) DrawBlockWithFeatures(blockY, blockX, nextBlock[0], blockRotate); // remove shadow for rec_play
+	if(playVersion==MENU_PLAY) DrawBlockWithFeatures(blockY, blockX, nextBlock[0], blockRotate); 
 	else {
+		// remove shadow for rec_play
 		DrawBlock(recommendY, recommendX, nextBlock[0], recommendR, 'R'); // 현재 블록의 추천 위치 chk
 		DrawBlock(blockY, blockX, nextBlock[0], blockRotate, ' '); // 현재 블록
 	}
@@ -351,12 +352,13 @@ void BlockDown(int sig) {
 int AddBlockToField(char f[HEIGHT][WIDTH], int currentBlock, int blockRotate, int blockY, int blockX) {
 	// user code
 	//Block이 추가된 영역의 필드값을 바꾼다.
-	int touched = 0;
+	touched_field = 0; touched_side = 0;
 	for (int i = 0; i < 4; i++) {
 		for (int j = 0; j < 4; j++) {
 			if (block[currentBlock][blockRotate][i][j] == 1){
-				if (blockY + i == HEIGHT - 1) touched++;
-				else if(f[blockY + i + 1][blockX + j] == 1) touched++;
+				if (blockY + i == HEIGHT - 1) touched_field++;
+				else if(f[blockY + i + 1][blockX + j] == 1) touched_field++;
+				if (blockX + j == 0 || block + j == WIDTH - 1) touched_side++;
 			}
 		}
 	}
@@ -367,7 +369,7 @@ int AddBlockToField(char f[HEIGHT][WIDTH], int currentBlock, int blockRotate, in
 			}
 		}
 	}
-	return touched * 10;
+	return touched_field * 10;
 }
 
 int DeleteLine(char f[HEIGHT][WIDTH]) {
@@ -376,7 +378,7 @@ int DeleteLine(char f[HEIGHT][WIDTH]) {
 	//1. 필드를 탐색하여, 꽉 찬 구간이 있는지 탐색한다.
 	//2. 꽉 찬 구간이 있으면 해당 구간을 지운다. 즉, 해당 구간으로 필드값을 한칸씩 내린다.
 	int flag; // 1: 꽉 찬 구간
-	int cnt = 0; // 꽉 찬 구간 개수
+	full_line = 0; // 꽉 찬 구간 개수
 	for (int i = 0; i < HEIGHT; i++) {
 		flag = 1;
 		for (int j = 0; j < WIDTH; j++) {
@@ -385,7 +387,7 @@ int DeleteLine(char f[HEIGHT][WIDTH]) {
 			}
 		}
 		if (flag) {
-			cnt++;
+			full_line++;
 			for (int k = i; k > 0; k--) { // 해당 구간으로 필드값 한칸씩 내리기
 				for (int m = 0; m < WIDTH; m++) {
 					f[k][m] = f[k - 1][m];
@@ -395,7 +397,7 @@ int DeleteLine(char f[HEIGHT][WIDTH]) {
 			for (int m = 0; m < WIDTH; m++) f[0][m] = 0;
 		}
 	}
-	return cnt * cnt * 100;
+	return full_line * full_line * 100;
 }
 
 ///////////////////////////////////////////////////////////////////////////
@@ -654,7 +656,7 @@ int recommend(RecNode* root) {
 	return max;
 }
 
-void recommendedPlay() { // tag: recp
+void recommendedPlay() { 
 	// user code
 	int command;
 	clear();
@@ -667,15 +669,14 @@ void recommendedPlay() { // tag: recp
 			timed_out = 1;
 		}
 
-		command = wgetch(stdscr);
-		if (command == 'q' || command == 'Q') {
+		if (GetCommand()==QUIT) {
 			alarm(0);
 			DrawBox(HEIGHT / 2 - 1, WIDTH / 2 - 5, 1, 10);
 			move(HEIGHT / 2, WIDTH / 2 - 4);
 			printw("Good-bye!!");
 			refresh();
 			getch();
-			newRank(score);
+			//newRank(score);  //chk
 			return;
 		}
 	} while (!gameOver);
@@ -687,16 +688,16 @@ void recommendedPlay() { // tag: recp
 	printw("GameOver!!");
 	refresh();
 	getch();
-	newRank(score);
+	//newRank(score);  // chck
 }
 
 int modified_recommend(RecNode* root) {
 	// 현재 레벨은 nextblock 인덱스를 따른다.
-	int res = 0; // 미리 보이는 블럭의 추천 배치까지 고려했을 때 얻을 수 있는 최대 점수
+	int res = -2000000000;// 미리 보이는 블럭의 추천 배치까지 고려했을 때 얻을 수 있는 최대 점수
 
 	// user code
 	if (root->lv == -1) {
-		recommendY = -1;
+		recommendX = recommendY = recommendR = 0; // chk
 		memcpy(root->f, field, sizeof(field));
 	}
 
@@ -714,7 +715,6 @@ int modified_recommend(RecNode* root) {
 	default: rotateNum = 2;
 	}
 
-	//int max, min;
 	for (childR = 0; childR < rotateNum; childR++) {
 		for (childX = 0; childX < WIDTH; childX++) {
 			childY = -1;
@@ -724,16 +724,14 @@ int modified_recommend(RecNode* root) {
 			memcpy(child->f, root->f, sizeof(field)); // 필드 복사
 			child->score = AddBlockToField(child->f, childID, childR, childY, childX);
 			child->score += DeleteLine(child->f);
+			child->score += touched_field * WFIELD + touched_side * WSIDE + full_line * WLINE; /* 가중치 chk */
 
 			if (child->lv < BLOCK_NUM - 1) {
 				child->score += modified_recommend(child);
 			}
 
 			/* 가중치 chk*/
-			//child->score += childY; // 높이 가중치: childY값 높을수록 좋음 (낮은 높이일수록)
-			//MaxMinHeight(&max, &min, child->f);
-			//child->score += max; // 필드 최대 높이 가중치: max값 높을수록 좋음(낮은 높이)
-			//child->score -= (max-min); // 필드 최대 최소 높이 차이: 값 낮을수록 좋음
+			child->score += FindValue(child->f);
 
 			if (child->score >= res) {
 				if (root->lv == -1) {
@@ -752,8 +750,15 @@ int modified_recommend(RecNode* root) {
 
 void RecDown(int sig) {
 	// user code
-	if (recommendY == -1) {
+
+	// chk
+	move(HEIGHT, WIDTH + 10);
+	printw("(%d, %d) %d", recommendY, recommendX, recommendR);
+	//
+
+	if (!CheckToMove(field, nextBlock[0], blockRotate, blockY+1,blockX)) {
 		gameOver = 1;
+		return;
 	}
 	score += AddBlockToField(field, nextBlock[0], recommendR, recommendY, recommendX);
 	score += DeleteLine(field);
@@ -774,18 +779,35 @@ void RecDown(int sig) {
 	timed_out = 0;
 }
 
-void MaxMinHeight (int* max, int* min, char f[HEIGHT][WIDTH]) { // chk
-	*max = -1;
-	*min = 22;
+int FindValue (char f[HEIGHT][WIDTH]) { // chk
+
+	int hole = 0, cover = 0, total_height = 0, max_height=0; 
+	// hole, cover, total_height, max_height: 작을수록 좋음.  
+	//side: 클수록 좋음
+	int tc, start;
 	for (int i = 0; i < WIDTH; i++) {
+		start = 0; tc = 0;
 		for (int j = 0; j < HEIGHT; j++) {
-			if (f[i][j] == 1) {
-				if (j > *max) *max = j;
-				if (j < *min) *min = j;
-				break;
+			if (f[j][i] == 1) {
+				if (start) {
+					tc++;
+				}
+				else {
+					start = 1;
+					total_height += (22-j);
+					if (j > max_height) max_height = (22-j);
+					tc++;
+				}
+			}
+			else {
+				if (start) {
+					hole++;
+					cover += tc; tc = 0;
+				}
 			}
 		}
 	}
-	if (*max == -1) *max = 21;
-	if (*min == 22) *min = 21;
+
+	int res = hole * WHOLE + cover * WCOVER + total_height * WTOTAL_HEIGHT + max_height * WMAX_HEIGHT;
+	return res;
 }

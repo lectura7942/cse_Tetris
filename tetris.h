@@ -368,5 +368,17 @@ void recommendedPlay();
 
 int modified_recommend(RecNode* root);
 void RecDown(int sig);
-void MaxMinHeight (int* max, int* min, char field[HEIGHT][WIDTH]);
+int FindValue (char field[HEIGHT][WIDTH]);
+
+int touched_field;
+int touched_side;
+int full_line;
+#define WFIELD 10
+#define WSIDE 5
+#define WLINE 1000
+#define WTOTAL_HEIGHT -10
+#define WMAX_HEIGHT -50
+#define WHOLE -10
+#define WCOVER -5
+
 #endif
