@@ -1,7 +1,6 @@
 #ifndef _TETRIS_H_
 #define _TETRIS_H_
 
-
 #include <stdio.h>
 #include <stdlib.h>
 #include <time.h>
@@ -371,14 +370,19 @@ void RecDown(int sig);
 int FindValue (char field[HEIGHT][WIDTH]);
 
 int touched_field;
-int touched_side;
+int touched_wall;
 int full_line;
-#define WFIELD 10
-#define WSIDE 5
-#define WLINE 1000
-#define WTOTAL_HEIGHT -10
+int block_max_height;
+
+/* weight */
+#define WFIELD 100 
+#define WWALL 110
+#define WLINE 3000 
 #define WMAX_HEIGHT -50
-#define WHOLE -10
-#define WCOVER -5
+#define WDIF -100 
+#define WHOLE -50 // side 제외
+#define WHEIGHT -500 
+#define WWELL  -30
+#define WSIDE_FILL 50
 
 #endif

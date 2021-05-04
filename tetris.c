@@ -50,11 +50,13 @@ void InitTetris() {
 
 	DrawOutline();
 	DrawField();
-	modified_recommend(recRoot);
+
+	modified_recommend(recRoot); // initiallized in main() 
+
 	if(playVersion==MENU_PLAY) DrawBlockWithFeatures(blockY, blockX, nextBlock[0], blockRotate); 
 	else {
 		// remove shadow for rec_play
-		DrawBlock(recommendY, recommendX, nextBlock[0], recommendR, 'R'); // 현재 블록의 추천 위치 chk
+		DrawBlock(recommendY, recommendX, nextBlock[0], recommendR, 'R'); // 현재 블록의 추천 위치 
 		DrawBlock(blockY, blockX, nextBlock[0], blockRotate, ' '); // 현재 블록
 	}
 	DrawNextBlock(nextBlock);
@@ -352,13 +354,15 @@ void BlockDown(int sig) {
 int AddBlockToField(char f[HEIGHT][WIDTH], int currentBlock, int blockRotate, int blockY, int blockX) {
 	// user code
 	//Block이 추가된 영역의 필드값을 바꾼다.
-	touched_field = 0; touched_side = 0;
+	touched_field = 0; touched_wall = 0;
+	block_max_height = 0;
 	for (int i = 0; i < 4; i++) {
 		for (int j = 0; j < 4; j++) {
 			if (block[currentBlock][blockRotate][i][j] == 1){
+				if (!block_max_height) block_max_height = HEIGHT-blockY - i;
 				if (blockY + i == HEIGHT - 1) touched_field++;
 				else if(f[blockY + i + 1][blockX + j] == 1) touched_field++;
-				if (blockX + j == 0 || block + j == WIDTH - 1) touched_side++;
+				if (blockX + j == 0 || blockX + j == WIDTH - 1) touched_wall++;
 			}
 		}
 	}
@@ -369,6 +373,7 @@ int AddBlockToField(char f[HEIGHT][WIDTH], int currentBlock, int blockRotate, in
 			}
 		}
 	}
+
 	return touched_field * 10;
 }
 
@@ -624,7 +629,7 @@ int recommend(RecNode* root) {
 	int childID = nextBlock[root->lv + 1];
 
 	for (childR = 0; childR < NUM_OF_ROTATE; childR++) {
-		for (childX = 0; childX < WIDTH; childX++) {
+		for (childX = -2; childX < WIDTH; childX++) {
 			childY = -1; 
 			while (CheckToMove(root->f, childID, childR, childY + 1, childX)) childY++;
 			if (childY == -1) continue;
@@ -676,7 +681,6 @@ void recommendedPlay() {
 			printw("Good-bye!!");
 			refresh();
 			getch();
-			//newRank(score);  //chk
 			return;
 		}
 	} while (!gameOver);
@@ -686,9 +690,9 @@ void recommendedPlay() {
 	DrawBox(HEIGHT / 2 - 1, WIDTH / 2 - 5, 1, 10);
 	move(HEIGHT / 2, WIDTH / 2 - 4);
 	printw("GameOver!!");
+
 	refresh();
 	getch();
-	//newRank(score);  // chck
 }
 
 int modified_recommend(RecNode* root) {
@@ -697,7 +701,7 @@ int modified_recommend(RecNode* root) {
 
 	// user code
 	if (root->lv == -1) {
-		recommendX = recommendY = recommendR = 0; // chk
+		recommendY = -1; 
 		memcpy(root->f, field, sizeof(field));
 	}
 
@@ -716,24 +720,29 @@ int modified_recommend(RecNode* root) {
 	}
 
 	for (childR = 0; childR < rotateNum; childR++) {
-		for (childX = 0; childX < WIDTH; childX++) {
-			childY = -1;
+		for (childX = -2; childX < WIDTH; childX++) {
+			// 주의! childX 범위!
+			childY = -2;
 			while (CheckToMove(root->f, childID, childR, childY + 1, childX)) childY++;
-			if (childY == -1) continue;
+			if (childY == -2) continue;
 
 			memcpy(child->f, root->f, sizeof(field)); // 필드 복사
+
 			child->score = AddBlockToField(child->f, childID, childR, childY, childX);
 			child->score += DeleteLine(child->f);
-			child->score += touched_field * WFIELD + touched_side * WSIDE + full_line * WLINE; /* 가중치 chk */
+
+			/* 가중치 */
+			child->score += touched_field * WFIELD + full_line * full_line * WLINE + touched_wall * WWALL + block_max_height * WHEIGHT;
 
 			if (child->lv < BLOCK_NUM - 1) {
 				child->score += modified_recommend(child);
 			}
+			else {
+				/* 가중치 */
+				child->score += FindValue(child->f);
+			}
 
-			/* 가중치 chk*/
-			child->score += FindValue(child->f);
-
-			if (child->score >= res) {
+			if (child->score > res) {
 				if (root->lv == -1) {
 					recommendY = childY;
 					recommendX = childX;
@@ -749,17 +758,13 @@ int modified_recommend(RecNode* root) {
 }
 
 void RecDown(int sig) {
+
 	// user code
-
-	// chk
-	move(HEIGHT, WIDTH + 10);
-	printw("(%d, %d) %d", recommendY, recommendX, recommendR);
-	//
-
-	if (!CheckToMove(field, nextBlock[0], blockRotate, blockY+1,blockX)) {
+	if (!CheckToMove(field, nextBlock[0], blockRotate, blockY, blockX) || !(CheckToMove(field, nextBlock[0], recommendR, recommendY, recommendX))) { //
 		gameOver = 1;
 		return;
-	}
+	} 
+
 	score += AddBlockToField(field, nextBlock[0], recommendR, recommendY, recommendX);
 	score += DeleteLine(field);
 	PrintScore(score);
@@ -768,46 +773,51 @@ void RecDown(int sig) {
 	}
 	nextBlock[BLOCK_NUM - 1] = rand() % 7;
 	DrawNextBlock(nextBlock);
-	modified_recommend(recRoot); // initiallized in main() --> modified
-	//Initiallize location of currentBlock
+
+	modified_recommend(recRoot); // initiallized in main() 
+
+	/* Initiallize location of currentBlock */
 	blockRotate = 0;
 	blockY = -1;
 	blockX = WIDTH / 2 - 2;
 	DrawField();
-	DrawBlock(recommendY, recommendX, nextBlock[0], recommendR, 'R'); // 현재 블록의 추천 위치 chk
+	DrawBlock(recommendY, recommendX, nextBlock[0], recommendR, 'R'); // 현재 블록의 추천 위치 
 	DrawBlock(blockY, blockX, nextBlock[0], blockRotate, ' '); // 현재 블록
 	timed_out = 0;
 }
 
-int FindValue (char f[HEIGHT][WIDTH]) { // chk
+int FindValue (char f[HEIGHT][WIDTH]) { 
 
-	int hole = 0, cover = 0, total_height = 0, max_height=0; 
-	// hole, cover, total_height, max_height: 작을수록 좋음.  
-	//side: 클수록 좋음
-	int tc, start;
+	int hole = 0, max_height = 0, min_height = HEIGHT, well = 0, side_fill = 0;
+	// hole, cover, total_height, max_height, well: 작을수록 좋음.  
+	int start, h, w;
 	for (int i = 0; i < WIDTH; i++) {
-		start = 0; tc = 0;
+		start = 0; h = 0; w = 0;
 		for (int j = 0; j < HEIGHT; j++) {
-			if (f[j][i] == 1) {
-				if (start) {
-					tc++;
+			if (start) {
+				if (f[j][i] == 0) {
+					if (i != 0 && i != WIDTH - 1) hole++;
 				}
-				else {
-					start = 1;
-					total_height += (22-j);
-					if (j > max_height) max_height = (22-j);
-					tc++;
-				}
+				if (i == 1 && f[j][0] == 1) side_fill++;
+				else if (i == WIDTH - 2 && f[j][WIDTH - 1] == 1) side_fill++;
 			}
 			else {
-				if (start) {
-					hole++;
-					cover += tc; tc = 0;
+				if (f[j][i] == 1) {
+					start = 1;
+					h = HEIGHT - j;
+				}
+				else {
+					if (w) well++;
+					else if ((i == 0 || f[j][i - 1] == 1) && (i == WIDTH - 1 || f[j][i + 1] == 1)) {
+						w = 1; well++;
+					}
 				}
 			}
 		}
+		if (h > max_height) max_height = h;
+		if (h < min_height) min_height = h;
 	}
 
-	int res = hole * WHOLE + cover * WCOVER + total_height * WTOTAL_HEIGHT + max_height * WMAX_HEIGHT;
+	int res = hole * WHOLE + max_height * WMAX_HEIGHT + (max_height - min_height) * WDIF + well * WWELL + side_fill * WSIDE_FILL;
 	return res;
 }
